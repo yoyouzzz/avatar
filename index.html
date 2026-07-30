@@ -28,6 +28,7 @@ h1{
     border-radius:10px;
     padding:10px;
     text-align:center;
+    box-shadow:0 2px 5px #ccc;
 }
 
 .card img{
@@ -42,11 +43,31 @@ h1{
 
 <h1>My Avatar Collection</h1>
 
-<div class="grid">
+<div class="grid" id="grid"></div>
 
-<p>ここにアバター一覧が表示されます</p>
+<script>
 
+fetch("avatars.json")
+.then(response => response.json())
+.then(data => {
+
+const grid=document.getElementById("grid");
+
+data.forEach(item=>{
+
+grid.innerHTML += `
+<div class="card">
+<img src="${item.image}">
+<h3>${item.name}</h3>
+<p>${item.category}</p>
 </div>
+`;
+
+});
+
+});
+
+</script>
 
 </body>
 </html>

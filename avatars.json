@@ -1,0 +1,12 @@
+[
+  {
+    "name": "テスト髪型",
+    "category": "髪",
+    "image": "https://via.placeholder.com/200"
+  },
+  {
+    "name": "テスト服",
+    "category": "服",
+    "image": "https://via.placeholder.com/200"
+  }
+]

@@ -51,9 +51,9 @@ fetch("avatars.json")
 .then(response => response.json())
 .then(data => {
 
-const grid=document.getElementById("grid");
+const grid = document.getElementById("grid");
 
-data.forEach(item=>{
+data.forEach(item => {
 
 grid.innerHTML += `
 <div class="card">

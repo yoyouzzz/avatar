@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>アバター一覧</title>
 
   <style>
@@ -12,8 +13,12 @@
 
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-        "Noto Sans JP", sans-serif;
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        "Noto Sans JP",
+        sans-serif;
       background: #f7f7f7;
       color: #333;
     }
@@ -34,7 +39,7 @@
 
     #search {
       width: 100%;
-      max-width: 600px;
+      max-width: 650px;
       padding: 12px 14px;
       border: 1px solid #ccc;
       border-radius: 8px;
@@ -53,10 +58,8 @@
 
     #avatar-list {
       display: grid;
-      grid-template-columns: repeat(
-        auto-fill,
-        minmax(150px, 1fr)
-      );
+      grid-template-columns:
+        repeat(auto-fill, minmax(150px, 1fr));
       gap: 14px;
     }
 
@@ -68,12 +71,19 @@
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
     }
 
+    .avatar-image-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 1 / 1;
+      background: #fafafa;
+    }
+
     .avatar-card img {
       display: block;
       width: 100%;
-      aspect-ratio: 1 / 1;
+      height: 100%;
       object-fit: contain;
-      background: #fafafa;
     }
 
     .avatar-info {
@@ -95,26 +105,25 @@
     }
 
     .message {
+      grid-column: 1 / -1;
       padding: 40px 16px;
       text-align: center;
       color: #666;
     }
 
     @media (max-width: 600px) {
-      #avatar-list {
-        grid-template-columns: repeat(
-          2,
-          minmax(0, 1fr)
-        );
-        gap: 10px;
+      header {
+        padding: 12px;
       }
 
       main {
         padding: 10px;
       }
 
-      header {
-        padding: 12px;
+      #avatar-list {
+        grid-template-columns:
+          repeat(2, minmax(0, 1fr));
+        gap: 10px;
       }
     }
   </style>
@@ -139,17 +148,72 @@
   </main>
 
   <script>
-    const searchInput = document.getElementById("search");
-    const avatarList = document.getElementById("avatar-list");
-    const countElement = document.getElementById("count");
+    const searchInput =
+      document.getElementById("search");
+
+    const avatarList =
+      document.getElementById("avatar-list");
+
+    const countElement =
+      document.getElementById("count");
 
     let avatars = [];
 
-    function normalizeText(text) {
-      return String(text || "")
+    function normalizeText(value) {
+      return String(value || "")
         .normalize("NFKC")
         .toLowerCase()
         .replace(/\s+/g, "");
+    }
+
+    function createAvatarCard(avatar) {
+      const card = document.createElement("article");
+      card.className = "avatar-card";
+
+      const imageWrap = document.createElement("div");
+      imageWrap.className = "avatar-image-wrap";
+
+      const image = document.createElement("img");
+      image.src = avatar.image || "";
+      image.alt = avatar.name || "アバター画像";
+      image.loading = "lazy";
+
+      image.addEventListener("error", () => {
+        imageWrap.textContent = "画像なし";
+        imageWrap.style.color = "#999";
+        imageWrap.style.fontSize = "12px";
+      });
+
+      imageWrap.appendChild(image);
+
+      const info = document.createElement("div");
+      info.className = "avatar-info";
+
+      const name = document.createElement("p");
+      name.className = "avatar-name";
+      name.textContent = avatar.name || "名前なし";
+
+      const category = document.createElement("div");
+      category.className = "avatar-category";
+
+      const categoryParts = [
+        avatar.category,
+        avatar.subcategory
+      ].filter(Boolean);
+
+      category.textContent =
+        categoryParts.join(" ＞ ");
+
+      info.appendChild(name);
+
+      if (categoryParts.length > 0) {
+        info.appendChild(category);
+      }
+
+      card.appendChild(imageWrap);
+      card.appendChild(info);
+
+      return card;
     }
 
     function renderAvatars(items) {
@@ -159,59 +223,30 @@
         `${items.length}件表示 / 全${avatars.length}件`;
 
       if (items.length === 0) {
-        avatarList.innerHTML =
-          '<div class="message">該当するアバターはありません。</div>';
+        const message = document.createElement("div");
+        message.className = "message";
+        message.textContent =
+          "該当するアバターはありません。";
+
+        avatarList.appendChild(message);
         return;
       }
 
-      const fragment = document.createDocumentFragment();
+      const fragment =
+        document.createDocumentFragment();
 
       for (const avatar of items) {
-        const card = document.createElement("article");
-        card.className = "avatar-card";
-
-        const image = document.createElement("img");
-        image.src = avatar.image;
-        image.alt = avatar.name || "アバター画像";
-        image.loading = "lazy";
-
-        image.addEventListener("error", () => {
-          image.style.display = "none";
-        });
-
-        const info = document.createElement("div");
-        info.className = "avatar-info";
-
-        const name = document.createElement("p");
-        name.className = "avatar-name";
-        name.textContent = avatar.name || "名前なし";
-
-        const category = document.createElement("div");
-        category.className = "avatar-category";
-
-        const categoryParts = [
-          avatar.category,
-          avatar.subcategory
-        ].filter(Boolean);
-
-        category.textContent = categoryParts.join(" ＞ ");
-
-        info.appendChild(name);
-
-        if (categoryParts.length > 0) {
-          info.appendChild(category);
-        }
-
-        card.appendChild(image);
-        card.appendChild(info);
-        fragment.appendChild(card);
+        fragment.appendChild(
+          createAvatarCard(avatar)
+        );
       }
 
       avatarList.appendChild(fragment);
     }
 
-    function searchAvatars() {
-      const keyword = normalizeText(searchInput.value);
+    function filterAvatars() {
+      const keyword =
+        normalizeText(searchInput.value);
 
       if (!keyword) {
         renderAvatars(avatars);
@@ -236,12 +271,14 @@
       try {
         const response = await fetch(
           "./avatars.json",
-          { cache: "no-store" }
+          {
+            cache: "no-store"
+          }
         );
 
         if (!response.ok) {
           throw new Error(
-            `avatars.jsonを読み込めませんでした：${response.status}`
+            `読み込み失敗：${response.status}`
           );
         }
 
@@ -249,27 +286,42 @@
 
         if (!Array.isArray(data)) {
           throw new Error(
-            "avatars.jsonの形式が配列ではありません。"
+            "avatars.jsonが配列形式ではありません。"
           );
         }
 
-        avatars = data;
+        avatars = data.filter(avatar =>
+          avatar &&
+          typeof avatar === "object" &&
+          avatar.name &&
+          avatar.image
+        );
+
         renderAvatars(avatars);
 
       } catch (error) {
         console.error(error);
 
-        countElement.textContent = "読み込み失敗";
+        countElement.textContent =
+          "読み込み失敗";
 
-        avatarList.innerHTML =
-          `<div class="message">
-            avatars.jsonを読み込めませんでした。<br>
-            index.htmlと同じ場所に置かれているか確認してください。
-          </div>`;
+        const message = document.createElement("div");
+        message.className = "message";
+
+        message.innerHTML = `
+          avatars.jsonを読み込めませんでした。<br>
+          少し待ってから再読み込みしてください。
+        `;
+
+        avatarList.innerHTML = "";
+        avatarList.appendChild(message);
       }
     }
 
-    searchInput.addEventListener("input", searchAvatars);
+    searchInput.addEventListener(
+      "input",
+      filterAvatars
+    );
 
     loadAvatars();
   </script>

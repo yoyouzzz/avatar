@@ -1,13 +1,3 @@
-// ==UserScript==
-// @name         ハンゲ クローゼット全カテゴリ全件JSON出力
-// @namespace    https://puretomo.hange.jp/
-// @version      2.0.0
-// @description  メインカテゴリ・サブカテゴリ・全ページを巡回してJSON出力
-// @match        https://puretomo.hange.jp/*
-// @grant        none
-// @run-at       document-idle
-// ==/UserScript==
-
 (function () {
     'use strict';
 [

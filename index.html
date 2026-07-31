@@ -1,73 +1,277 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アバター一覧</title>
 
-<title>My Avatar Collection</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-<style>
-body{
-    font-family:sans-serif;
-    background:#f5f5f5;
-    margin:30px;
-}
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Noto Sans JP", sans-serif;
+      background: #f7f7f7;
+      color: #333;
+    }
 
-h1{
-    text-align:center;
-}
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.96);
+      border-bottom: 1px solid #ddd;
+    }
 
-.grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
-    gap:20px;
-}
+    h1 {
+      margin: 0 0 12px;
+      font-size: 22px;
+    }
 
-.card{
-    background:white;
-    border-radius:10px;
-    padding:10px;
-    text-align:center;
-    box-shadow:0 2px 5px #ccc;
-}
+    #search {
+      width: 100%;
+      max-width: 600px;
+      padding: 12px 14px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+    }
 
-.card img{
-    width:100%;
-    border-radius:8px;
-}
-</style>
+    #count {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #666;
+    }
 
+    main {
+      padding: 16px;
+    }
+
+    #avatar-list {
+      display: grid;
+      grid-template-columns: repeat(
+        auto-fill,
+        minmax(150px, 1fr)
+      );
+      gap: 14px;
+    }
+
+    .avatar-card {
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
+    .avatar-card img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
+      background: #fafafa;
+    }
+
+    .avatar-info {
+      padding: 10px;
+    }
+
+    .avatar-name {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .avatar-category {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .message {
+      padding: 40px 16px;
+      text-align: center;
+      color: #666;
+    }
+
+    @media (max-width: 600px) {
+      #avatar-list {
+        grid-template-columns: repeat(
+          2,
+          minmax(0, 1fr)
+        );
+        gap: 10px;
+      }
+
+      main {
+        padding: 10px;
+      }
+
+      header {
+        padding: 12px;
+      }
+    }
+  </style>
 </head>
 
 <body>
+  <header>
+    <h1>アバター一覧</h1>
 
-<h1>My Avatar Collection</h1>
+    <input
+      id="search"
+      type="search"
+      placeholder="アバター名を検索"
+      autocomplete="off"
+    >
 
-<div class="grid" id="grid"></div>
+    <div id="count">読み込み中...</div>
+  </header>
 
-<script>
+  <main>
+    <div id="avatar-list"></div>
+  </main>
 
-fetch("avatars.json")
-.then(response => response.json())
-.then(data => {
+  <script>
+    const searchInput = document.getElementById("search");
+    const avatarList = document.getElementById("avatar-list");
+    const countElement = document.getElementById("count");
 
-const grid = document.getElementById("grid");
+    let avatars = [];
 
-data.forEach(item => {
+    function normalizeText(text) {
+      return String(text || "")
+        .normalize("NFKC")
+        .toLowerCase()
+        .replace(/\s+/g, "");
+    }
 
-grid.innerHTML += `
-<div class="card">
-<img src="${item.image}">
-<h3>${item.name}</h3>
-<p>${item.category}</p>
-</div>
-`;
+    function renderAvatars(items) {
+      avatarList.innerHTML = "";
 
-});
+      countElement.textContent =
+        `${items.length}件表示 / 全${avatars.length}件`;
 
-});
+      if (items.length === 0) {
+        avatarList.innerHTML =
+          '<div class="message">該当するアバターはありません。</div>';
+        return;
+      }
 
-</script>
+      const fragment = document.createDocumentFragment();
 
+      for (const avatar of items) {
+        const card = document.createElement("article");
+        card.className = "avatar-card";
+
+        const image = document.createElement("img");
+        image.src = avatar.image;
+        image.alt = avatar.name || "アバター画像";
+        image.loading = "lazy";
+
+        image.addEventListener("error", () => {
+          image.style.display = "none";
+        });
+
+        const info = document.createElement("div");
+        info.className = "avatar-info";
+
+        const name = document.createElement("p");
+        name.className = "avatar-name";
+        name.textContent = avatar.name || "名前なし";
+
+        const category = document.createElement("div");
+        category.className = "avatar-category";
+
+        const categoryParts = [
+          avatar.category,
+          avatar.subcategory
+        ].filter(Boolean);
+
+        category.textContent = categoryParts.join(" ＞ ");
+
+        info.appendChild(name);
+
+        if (categoryParts.length > 0) {
+          info.appendChild(category);
+        }
+
+        card.appendChild(image);
+        card.appendChild(info);
+        fragment.appendChild(card);
+      }
+
+      avatarList.appendChild(fragment);
+    }
+
+    function searchAvatars() {
+      const keyword = normalizeText(searchInput.value);
+
+      if (!keyword) {
+        renderAvatars(avatars);
+        return;
+      }
+
+      const filtered = avatars.filter(avatar => {
+        const searchableText = normalizeText([
+          avatar.name,
+          avatar.category,
+          avatar.subcategory,
+          avatar.id
+        ].join(" "));
+
+        return searchableText.includes(keyword);
+      });
+
+      renderAvatars(filtered);
+    }
+
+    async function loadAvatars() {
+      try {
+        const response = await fetch(
+          "./avatars.json",
+          { cache: "no-store" }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `avatars.jsonを読み込めませんでした：${response.status}`
+          );
+        }
+
+        const data = await response.json();
+
+        if (!Array.isArray(data)) {
+          throw new Error(
+            "avatars.jsonの形式が配列ではありません。"
+          );
+        }
+
+        avatars = data;
+        renderAvatars(avatars);
+
+      } catch (error) {
+        console.error(error);
+
+        countElement.textContent = "読み込み失敗";
+
+        avatarList.innerHTML =
+          `<div class="message">
+            avatars.jsonを読み込めませんでした。<br>
+            index.htmlと同じ場所に置かれているか確認してください。
+          </div>`;
+      }
+    }
+
+    searchInput.addEventListener("input", searchAvatars);
+
+    loadAvatars();
+  </script>
 </body>
 </html>

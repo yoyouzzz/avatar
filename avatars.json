@@ -1,277 +1,494 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>アバター一覧</title>
+// ==UserScript==
+// @name         ハンゲ クローゼット全カテゴリ全件JSON出力
+// @namespace    https://puretomo.hange.jp/
+// @version      2.0.0
+// @description  メインカテゴリ・サブカテゴリ・全ページを巡回してJSON出力
+// @match        https://puretomo.hange.jp/*
+// @grant        none
+// @run-at       document-idle
+// ==/UserScript==
 
-  <style>
-    * {
-      box-sizing: border-box;
+(function () {
+    'use strict';
+
+    const MAIN_CATEGORIES = [
+        '衣装',
+        'ヘアスタイル',
+        '雑貨',
+        'ペット',
+        '背景＆エフェクト',
+        'フェイス'
+    ];
+
+    let running = false;
+
+    const sleep = ms =>
+        new Promise(resolve => setTimeout(resolve, ms));
+
+    function normalizeText(value) {
+        return String(value || '')
+            .replace(/\s+/g, '')
+            .replace(/&/g, '＆')
+            .trim();
     }
 
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-        "Noto Sans JP", sans-serif;
-      background: #f7f7f7;
-      color: #333;
+    function getCurrentItems() {
+        return [...document.querySelectorAll(
+            'div[class*="itemList_dispWrap"]'
+        )]
+            .map(item => {
+                const img = item.querySelector('img');
+                const p = item.querySelector('p');
+
+                const name =
+                    img?.alt?.trim() ||
+                    p?.textContent?.trim() ||
+                    '';
+
+                const image =
+                    img?.currentSrc ||
+                    img?.src ||
+                    '';
+
+                const idMatch = image.match(
+                    /\/([^/?#]+)\.(?:gif|png|jpe?g|webp)(?:[?#]|$)/i
+                );
+
+                return {
+                    id: idMatch?.[1] || '',
+                    name,
+                    image
+                };
+            })
+            .filter(item => item.name && item.image);
     }
 
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      padding: 16px;
-      background: rgba(255, 255, 255, 0.96);
-      border-bottom: 1px solid #ddd;
+    function getFirstImage() {
+        return getCurrentItems()[0]?.image || '';
     }
 
-    h1 {
-      margin: 0 0 12px;
-      font-size: 22px;
-    }
-
-    #search {
-      width: 100%;
-      max-width: 600px;
-      padding: 12px 14px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      font-size: 16px;
-    }
-
-    #count {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #666;
-    }
-
-    main {
-      padding: 16px;
-    }
-
-    #avatar-list {
-      display: grid;
-      grid-template-columns: repeat(
-        auto-fill,
-        minmax(150px, 1fr)
-      );
-      gap: 14px;
-    }
-
-    .avatar-card {
-      overflow: hidden;
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-    }
-
-    .avatar-card img {
-      display: block;
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      object-fit: contain;
-      background: #fafafa;
-    }
-
-    .avatar-info {
-      padding: 10px;
-    }
-
-    .avatar-name {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 1.5;
-      word-break: break-word;
-    }
-
-    .avatar-category {
-      margin-top: 6px;
-      font-size: 12px;
-      color: #777;
-    }
-
-    .message {
-      padding: 40px 16px;
-      text-align: center;
-      color: #666;
-    }
-
-    @media (max-width: 600px) {
-      #avatar-list {
-        grid-template-columns: repeat(
-          2,
-          minmax(0, 1fr)
+    function getCurrentPage() {
+        const current = document.querySelector(
+            'button[aria-current="true"], button.Mui-selected'
         );
-        gap: 10px;
-      }
 
-      main {
-        padding: 10px;
-      }
+        if (!current) return 1;
 
-      header {
-        padding: 12px;
-      }
-    }
-  </style>
-</head>
+        const label = current.getAttribute('aria-label') || '';
+        const match = label.match(/page\s*(\d+)/i);
 
-<body>
-  <header>
-    <h1>アバター一覧</h1>
+        if (match) return Number(match[1]);
 
-    <input
-      id="search"
-      type="search"
-      placeholder="アバター名を検索"
-      autocomplete="off"
-    >
-
-    <div id="count">読み込み中...</div>
-  </header>
-
-  <main>
-    <div id="avatar-list"></div>
-  </main>
-
-  <script>
-    const searchInput = document.getElementById("search");
-    const avatarList = document.getElementById("avatar-list");
-    const countElement = document.getElementById("count");
-
-    let avatars = [];
-
-    function normalizeText(text) {
-      return String(text || "")
-        .normalize("NFKC")
-        .toLowerCase()
-        .replace(/\s+/g, "");
+        const number = Number(current.textContent?.trim());
+        return Number.isFinite(number) ? number : 1;
     }
 
-    function renderAvatars(items) {
-      avatarList.innerHTML = "";
+    function findNextButton() {
+        return document.querySelector(
+            'button[aria-label="Go to next page"]'
+        ) || [...document.querySelectorAll('button')].find(button =>
+            /next page/i.test(
+                button.getAttribute('aria-label') || ''
+            )
+        );
+    }
 
-      countElement.textContent =
-        `${items.length}件表示 / 全${avatars.length}件`;
+    function isDisabled(button) {
+        return !button ||
+            button.disabled ||
+            button.getAttribute('aria-disabled') === 'true' ||
+            button.classList.contains('Mui-disabled');
+    }
 
-      if (items.length === 0) {
-        avatarList.innerHTML =
-          '<div class="message">該当するアバターはありません。</div>';
-        return;
-      }
+    async function waitForChange(
+        previousImage,
+        previousPage,
+        timeout = 15000
+    ) {
+        const start = Date.now();
 
-      const fragment = document.createDocumentFragment();
+        while (Date.now() - start < timeout) {
+            await sleep(300);
 
-      for (const avatar of items) {
-        const card = document.createElement("article");
-        card.className = "avatar-card";
+            const items = getCurrentItems();
+            const currentImage = items[0]?.image || '';
+            const currentPage = getCurrentPage();
 
-        const image = document.createElement("img");
-        image.src = avatar.image;
-        image.alt = avatar.name || "アバター画像";
-        image.loading = "lazy";
+            if (
+                items.length > 0 &&
+                (
+                    currentImage !== previousImage ||
+                    currentPage !== previousPage
+                )
+            ) {
+                await sleep(700);
+                return true;
+            }
+        }
 
-        image.addEventListener("error", () => {
-          image.style.display = "none";
+        await sleep(1000);
+        return false;
+    }
+
+    function findMainCategoryButton(name) {
+        const target = normalizeText(name);
+
+        return [...document.querySelectorAll(
+            'ul[class*="closet_categoryTab"] > li > button'
+        )].find(button =>
+            normalizeText(button.textContent) === target
+        );
+    }
+
+    function getSubCategoryButtons() {
+        return [...document.querySelectorAll(
+            'ul[class*="closet_categorySubTab"] > li > button'
+        )];
+    }
+
+    function getSubCategoryNames() {
+        return getSubCategoryButtons()
+            .map(button => button.textContent?.trim())
+            .filter(Boolean);
+    }
+
+    function findSubCategoryButton(name) {
+        const target = normalizeText(name);
+
+        return getSubCategoryButtons().find(button =>
+            normalizeText(button.textContent) === target
+        );
+    }
+
+    async function clickAndWait(button) {
+        if (!button) {
+            throw new Error('クリック対象が見つかりません。');
+        }
+
+        const previousImage = getFirstImage();
+        const previousPage = getCurrentPage();
+
+        button.click();
+
+        await waitForChange(
+            previousImage,
+            previousPage
+        );
+
+        await sleep(600);
+    }
+
+    async function openMainCategory(name) {
+        const button = findMainCategoryButton(name);
+
+        if (!button) {
+            throw new Error(
+                `メインカテゴリ「${name}」が見つかりません。`
+            );
+        }
+
+        await clickAndWait(button);
+    }
+
+    async function openSubCategory(name) {
+        const button = findSubCategoryButton(name);
+
+        if (!button) {
+            throw new Error(
+                `サブカテゴリ「${name}」が見つかりません。`
+            );
+        }
+
+        await clickAndWait(button);
+    }
+
+    async function collectCurrentSubCategory(
+        mainCategory,
+        subCategory,
+        allItems,
+        seen
+    ) {
+        let safety = 0;
+
+        while (true) {
+            safety += 1;
+
+            if (safety > 1000) {
+                throw new Error(
+                    `${mainCategory} / ${subCategory}で処理回数が上限を超えました。`
+                );
+            }
+
+            await sleep(400);
+
+            const page = getCurrentPage();
+            const items = getCurrentItems();
+
+            for (const item of items) {
+                const key = item.image;
+
+                if (seen.has(key)) continue;
+
+                seen.add(key);
+
+                allItems.push({
+                    category: mainCategory,
+                    subcategory: subCategory,
+                    page,
+                    id: item.id,
+                    name: item.name,
+                    image: item.image
+                });
+            }
+
+            updateStatus(
+                `${mainCategory} ＞ ${subCategory} ＞ ${page}ページ ` +
+                `（合計${allItems.length}件）`
+            );
+
+            const nextButton = findNextButton();
+
+            if (isDisabled(nextButton)) {
+                break;
+            }
+
+            const previousImage = getFirstImage();
+            const previousPage = getCurrentPage();
+
+            nextButton.click();
+
+            await waitForChange(
+                previousImage,
+                previousPage
+            );
+
+            const newImage = getFirstImage();
+            const newPage = getCurrentPage();
+
+            if (
+                newImage === previousImage &&
+                newPage === previousPage
+            ) {
+                console.warn(
+                    `${mainCategory} / ${subCategory}：ページが変わらないため終了`
+                );
+                break;
+            }
+        }
+    }
+
+    function downloadJson(data) {
+        const blob = new Blob(
+            [JSON.stringify(data, null, 2)],
+            { type: 'application/json;charset=utf-8' }
+        );
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const now = new Date();
+
+        const date = [
+            now.getFullYear(),
+            String(now.getMonth() + 1).padStart(2, '0'),
+            String(now.getDate()).padStart(2, '0')
+        ].join('-');
+
+        link.href = url;
+        link.download = `avatars-${date}.json`;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    function updateStatus(text) {
+        const status =
+            document.getElementById('avatar-export-status');
+
+        if (status) {
+            status.textContent = text;
+        }
+
+        console.log(`[アバター取得] ${text}`);
+    }
+
+    async function exportEverything() {
+        if (running) {
+            alert('現在取得中です。');
+            return;
+        }
+
+        running = true;
+
+        const button =
+            document.getElementById('avatar-export-button');
+
+        if (button) {
+            button.disabled = true;
+            button.textContent = '取得中…';
+        }
+
+        const allItems = [];
+        const seen = new Set();
+
+        try {
+            updateStatus('取得開始');
+
+            for (const mainCategory of MAIN_CATEGORIES) {
+                updateStatus(`${mainCategory}へ移動中`);
+
+                await openMainCategory(mainCategory);
+
+                /*
+                 * メインカテゴリを開いたあとに表示される
+                 * サブカテゴリ名を取得します。
+                 */
+                await sleep(500);
+
+                const subCategories =
+                    getSubCategoryNames();
+
+                if (subCategories.length === 0) {
+                    /*
+                     * サブカテゴリがないカテゴリ用
+                     */
+                    await collectCurrentSubCategory(
+                        mainCategory,
+                        'すべて',
+                        allItems,
+                        seen
+                    );
+
+                    continue;
+                }
+
+                /*
+                 * DOMは切替のたびに更新される可能性があるため、
+                 * 最初に名前だけ保存して順番に再検索します。
+                 */
+                for (const subCategory of subCategories) {
+                    updateStatus(
+                        `${mainCategory} ＞ ${subCategory}へ移動中`
+                    );
+
+                    await openSubCategory(subCategory);
+
+                    await collectCurrentSubCategory(
+                        mainCategory,
+                        subCategory,
+                        allItems,
+                        seen
+                    );
+                }
+            }
+
+            downloadJson(allItems);
+
+            updateStatus(
+                `完了：合計${allItems.length}件`
+            );
+
+            alert(
+                `取得完了！\n合計${allItems.length}件を保存しました。`
+            );
+
+            console.table(allItems);
+
+        } catch (error) {
+            console.error(error);
+
+            updateStatus('エラーで停止');
+
+            alert(
+                `途中で停止しました。\n\n${error.message}\n\n` +
+                'Consoleの赤いエラーを確認してください。'
+            );
+
+        } finally {
+            running = false;
+
+            if (button) {
+                button.disabled = false;
+                button.textContent =
+                    '全アバターをJSON保存';
+            }
+        }
+    }
+
+    function createPanel() {
+        if (
+            document.getElementById('avatar-export-panel')
+        ) {
+            return;
+        }
+
+        const panel = document.createElement('div');
+        panel.id = 'avatar-export-panel';
+
+        Object.assign(panel.style, {
+            position: 'fixed',
+            right: '18px',
+            bottom: '18px',
+            zIndex: '999999',
+            padding: '12px',
+            background: 'rgba(255,255,255,0.97)',
+            border: '2px solid #ed91aa',
+            borderRadius: '10px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            fontFamily: '"Noto Sans JP", sans-serif',
+            textAlign: 'center'
         });
 
-        const info = document.createElement("div");
-        info.className = "avatar-info";
+        const button = document.createElement('button');
+        button.id = 'avatar-export-button';
+        button.textContent = '全アバターをJSON保存';
 
-        const name = document.createElement("p");
-        name.className = "avatar-name";
-        name.textContent = avatar.name || "名前なし";
+        Object.assign(button.style, {
+            padding: '10px 16px',
+            border: 'none',
+            borderRadius: '7px',
+            background: '#ed91aa',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: '700',
+            cursor: 'pointer'
+        });
 
-        const category = document.createElement("div");
-        category.className = "avatar-category";
-
-        const categoryParts = [
-          avatar.category,
-          avatar.subcategory
-        ].filter(Boolean);
-
-        category.textContent = categoryParts.join(" ＞ ");
-
-        info.appendChild(name);
-
-        if (categoryParts.length > 0) {
-          info.appendChild(category);
-        }
-
-        card.appendChild(image);
-        card.appendChild(info);
-        fragment.appendChild(card);
-      }
-
-      avatarList.appendChild(fragment);
-    }
-
-    function searchAvatars() {
-      const keyword = normalizeText(searchInput.value);
-
-      if (!keyword) {
-        renderAvatars(avatars);
-        return;
-      }
-
-      const filtered = avatars.filter(avatar => {
-        const searchableText = normalizeText([
-          avatar.name,
-          avatar.category,
-          avatar.subcategory,
-          avatar.id
-        ].join(" "));
-
-        return searchableText.includes(keyword);
-      });
-
-      renderAvatars(filtered);
-    }
-
-    async function loadAvatars() {
-      try {
-        const response = await fetch(
-          "./avatars.json",
-          { cache: "no-store" }
+        button.addEventListener(
+            'click',
+            exportEverything
         );
 
-        if (!response.ok) {
-          throw new Error(
-            `avatars.jsonを読み込めませんでした：${response.status}`
-          );
-        }
+        const status = document.createElement('div');
+        status.id = 'avatar-export-status';
+        status.textContent = '待機中';
 
-        const data = await response.json();
+        Object.assign(status.style, {
+            marginTop: '7px',
+            maxWidth: '280px',
+            fontSize: '12px',
+            color: '#555'
+        });
 
-        if (!Array.isArray(data)) {
-          throw new Error(
-            "avatars.jsonの形式が配列ではありません。"
-          );
-        }
-
-        avatars = data;
-        renderAvatars(avatars);
-
-      } catch (error) {
-        console.error(error);
-
-        countElement.textContent = "読み込み失敗";
-
-        avatarList.innerHTML =
-          `<div class="message">
-            avatars.jsonを読み込めませんでした。<br>
-            index.htmlと同じ場所に置かれているか確認してください。
-          </div>`;
-      }
+        panel.appendChild(button);
+        panel.appendChild(status);
+        document.body.appendChild(panel);
     }
 
-    searchInput.addEventListener("input", searchAvatars);
+    const timer = setInterval(() => {
+        const mainTabs = document.querySelector(
+            'ul[class*="closet_categoryTab"]'
+        );
 
-    loadAvatars();
-  </script>
-</body>
-</html>
+        if (mainTabs) {
+            clearInterval(timer);
+            createPanel();
+            console.log(
+                '全カテゴリ・サブカテゴリ取得の準備完了'
+            );
+        }
+    }, 1000);
+
+})();
